@@ -26,7 +26,6 @@ RUN apt-get update && apt-get install -q -y --no-install-recommends \
 RUN set -x && \
   apt-get update -y -qq && \
   apt-get install -y -qq ros-humble-desktop \
-    ros-humble-ament-cmake ros-humble-angles ros-humble-controller-manager \
     ros-humble-cv-bridge ros-humble-usb-cam && \
   : "remove cache" && \
   apt-get autoremove -y -qq && \
