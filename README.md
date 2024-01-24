@@ -19,6 +19,8 @@ The Dockerfile can be used to prepare a development environment.
 
    ```
    ros2 run ros2_theta_cam theta_cam
+   or
+   ros2 launch ros2_theta_cam theta_cam.launch.py
    ```
 
 2. If you want to check image outputs, launch rviz2 with another terminal.
