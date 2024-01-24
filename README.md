@@ -18,7 +18,7 @@ The Dockerfile can be used to prepare a development environment.
 1. Check that your ThetaV is Live-Streaming-Mode, and run!
 
    ```
-   ros2 run ros2_thetav thetav_publisher
+   ros2 run ros2_theta_cam theta_cam
    ```
 
 2. If you want to check image outputs, launch rviz2 with another terminal.
