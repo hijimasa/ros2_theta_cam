@@ -14,9 +14,13 @@ class ThetaNode(Node):
         self.declare_parameter('serial', '')
         
         mode = self.get_parameter('mode').get_parameter_value().string_value
+        mode = mode.replace('"', '')
+        mode = mode.replace("'", '')
         if not mode == '4K' and not mode == '2K':
             raise ValueError("mode must be setted '2K' or '4K'!!")
         serial = self.get_parameter('serial').get_parameter_value().string_value
+        serial = serial.replace('"', '')
+        serial = serial.replace("'", '')
         
         if serial == "":
             config_str = "thetauvcsrc mode=" + mode + " ! decodebin ! autovideoconvert ! video/x-raw,format=BGRx ! queue ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink"

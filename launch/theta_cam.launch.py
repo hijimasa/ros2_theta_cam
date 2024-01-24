@@ -7,8 +7,8 @@ def generate_launch_description():
             executable='theta_cam',
             name='theta_cam',
             parameters=[
-                {'mode': '4K'}, # Image resolution: '4K' or '2K'
-                {'serial': ''}, # Serial number:    example:'001234556'
+                {'mode': "'4K'"}, # Image resolution: '4K' or '2K'
+                {'serial': "''"}, # Serial number:    example:'001234556'
             ],
             output='screen',
         )
