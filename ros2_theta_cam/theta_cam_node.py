@@ -3,6 +3,11 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 import cv2
 from cv_bridge import CvBridge
+import time
+from subprocess import getoutput
+
+DEVICE_IDVENDER_STR = "idVendor           0x05ca Ricoh Co., Ltd"
+DEVICE_IDPRODUCT_STR = "idProduct          0x2712"
 
 # Nodeクラスを継承
 class ThetaNode(Node):
@@ -21,6 +26,29 @@ class ThetaNode(Node):
         serial = self.get_parameter('serial').get_parameter_value().string_value
         serial = serial.replace('"', '')
         serial = serial.replace("'", '')
+
+        is_found = False
+        while True:
+            device_list_str = getoutput("lsusb -v")
+            device_list = device_list_str.rstrip().split('\n')
+
+            for i in range(len(device_list)):
+                if DEVICE_IDVENDER_STR in device_list[i] and DEVICE_IDPRODUCT_STR in device_list[i+1]:
+                    if not serial == "":
+                        if serial in device_list[i+5]:
+                            is_found = True
+                        else:
+                            print(device_list[i+5])
+                    else:
+                        is_found = True
+
+            if is_found == True:
+                break
+            else:
+                print("wait to connect THETA")
+                if not serial == "":
+                    print("serial number: " + serial)
+                time.sleep(2)
         
         if serial == "":
             config_str = "thetauvcsrc mode=" + mode + " ! decodebin ! autovideoconvert ! video/x-raw,format=BGRx ! queue ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink"
