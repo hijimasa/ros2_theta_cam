@@ -64,6 +64,8 @@ class ThetaNode(Node):
 
         # Node.create_timer(timer_period_sec, callback)に引数を渡してタイマーを作成
         self.timer = self.create_timer(self.timer_period, self.publish_image_callback)
+        
+        self.counter = 0
 
     def __del__(self):
         if self.cap.isOpened():
@@ -73,9 +75,12 @@ class ThetaNode(Node):
         bridge = CvBridge()
         ret, frame = self.cap.read()
         if ret:
-            image = cv2.resize(frame, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
-            image_msg = bridge.cv2_to_imgmsg(image, encoding="bgr8")
-            self.publisher.publish(image_msg)
+            self.counter = self.counter + 1
+            if self.counter >= 3:
+                self.counter = 0
+                image = cv2.resize(frame, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
+                image_msg = bridge.cv2_to_imgmsg(image, encoding="bgr8")
+                self.publisher.publish(image_msg)
 
 def main(args=None):
     rclpy.init(args=args)
