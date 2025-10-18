@@ -23,9 +23,14 @@ DEVICE_IDPRODUCT_STR2 = "idProduct          0x0368"
 class FrameGrabber:
     def __init__(self, config_str):
         # １回だけ開く
+        print(f"Attempting to open GStreamer pipeline: {config_str}")
         self.cap = cv2.VideoCapture(config_str, cv2.CAP_GSTREAMER)
         if not self.cap.isOpened():
-            raise IOError("Cannot open capture pipeline")
+            print(f"Failed to open capture pipeline with config: {config_str}")
+            # Try to get more error information
+            import os
+            os.environ['GST_DEBUG'] = '3'
+            raise IOError(f"Cannot open capture pipeline: {config_str}")
         # サイズ１のキュー（常に最新１枚だけ残す）
         self.q = queue.Queue(maxsize=1)
         self.running = True
