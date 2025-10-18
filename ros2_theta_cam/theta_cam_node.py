@@ -112,6 +112,13 @@ class ThetaNode(Node):
                         continue
 
                     #Bus 003 Device 019: ID 05ca:0368 Ricoh Co., Ltd RICOH THETA V
+                    # gvfs-gphoto2-volume-monitorをkill（デバイスの競合を避けるため）
+                    try:
+                        subprocess.run("killall -q gvfs-gphoto2-volume-monitor", shell=True, stderr=subprocess.DEVNULL)
+                        time.sleep(1)
+                    except Exception:
+                        pass
+
                     # アクティブなコンフィグの全インターフェースでドライバをデタッチ
                     try:
                         for cfg in dev:
@@ -120,14 +127,22 @@ class ThetaNode(Node):
                                 if dev.is_kernel_driver_active(num):
                                     dev.detach_kernel_driver(num)
                                     usb.util.release_interface(dev, num)
+                                    print(f"Detached kernel driver from interface {num}")
                     except Exception as e:
                         print(f"Warning: Failed to detach kernel driver: {e}")
 
-                    time.sleep(1)
+                    # デタッチ後、十分に待機してからgphoto2を実行
+                    time.sleep(2)
                     device_port = "usb:" + device_list[i-9][4:7] + ":" + device_list[i-9][15:18]
                     print("device port: " + device_port)
-                    subprocess.run(f"gphoto2 --port={device_port} --set-config 5013=32773", shell=True)
-                    time.sleep(1)
+
+                    # gphoto2でライブストリーミングモードに設定（エラーは無視）
+                    result = subprocess.run(f"gphoto2 --port={device_port} --set-config 5013=32773",
+                                          shell=True, capture_output=True, text=True)
+                    if result.returncode != 0:
+                        print(f"Warning: gphoto2 command failed (this may be normal): {result.stderr}")
+
+                    time.sleep(2)
 
             if is_found == True:
                 break
