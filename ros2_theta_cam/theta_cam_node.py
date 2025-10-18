@@ -83,13 +83,18 @@ class ThetaNode(Node):
             for i in range(len(device_list)):
                 if DEVICE_IDVENDER_STR in device_list[i] and DEVICE_IDPRODUCT_STR in device_list[i+1]:
                     print(device_list[i])
+                    print(device_list[i+1])
                     if not serial == "":
-                        # ライブストリーミングモード(0x2712)の場合、シリアル番号はi+4の位置
-                        if serial in device_list[i+4]:
+                        # ライブストリーミングモード(0x2712)の場合、シリアル番号はi+5の位置
+                        print(f"Checking i+2: {device_list[i+2]}")
+                        print(f"Checking i+3: {device_list[i+3]}")
+                        print(f"Checking i+4: {device_list[i+4]}")
+                        print(f"Checking i+5: {device_list[i+5]}")
+                        if serial in device_list[i+5]:
                             is_found = True
                             print(f"Found THETA with serial: {serial}")
                         else:
-                            print(f"Serial mismatch. Expected: {serial}, Found: {device_list[i+4]}")
+                            print(f"Serial mismatch. Expected: {serial}, Found: {device_list[i+5]}")
                     else:
                         is_found = True
                 if DEVICE_IDVENDER_STR in device_list[i] and DEVICE_IDPRODUCT_STR2 in device_list[i+1]:
