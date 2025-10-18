@@ -129,30 +129,33 @@ class ThetaNode(Node):
 
         # Node.create_publisher(msg_type, topic)に引数を渡してpublisherを作成
         self.publisher = self.create_publisher(Image, 'image_topic', 10)
-        self.timer_period = 0.01  # seconds
+        # タイマー周期を60Hz基準に設定（カメラの30FPSを安定的に取得）
+        self.timer_period = 0.0167  # seconds (約60Hz)
 
         # Node.create_timer(timer_period_sec, callback)に引数を渡してタイマーを作成
         self.timer = self.create_timer(self.timer_period, self.publish_image_callback)
-        
+
         self.error_flag = False
+        # 30FPSから10FPSへの間引き用カウンタ（3回に1回publish）
         self.counter = 0
+
+        # CvBridgeを1回だけ生成（毎回生成するとオーバーヘッドが大きい）
+        self.bridge = CvBridge()
 
     def __del__(self):
         return
 
     def publish_image_callback(self):
-        bridge = CvBridge()
-
         ret, frame = self.frame_grabber.read(timeout=1.0)
 
         if ret:
             self.counter = self.counter + 1
             if self.counter >= 3:
                 self.counter = 0
-                image = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-                image_msg = bridge.cv2_to_imgmsg(image, encoding="bgr8")
+                # スライシングによる高速リサイズ（cv2.resizeより軽量）
+                image = frame[::2, ::2]
+                image_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
                 self.publisher.publish(image_msg)
-                self.publish_time = self.get_clock().now()
         else:
             # フレーム取得失敗時はエラーログを出してシャットダウン
             self.get_logger().error('Failed to capture image. Shutting down node.')
