@@ -97,16 +97,32 @@ class ThetaNode(Node):
                         # リセット実行
                         dev.reset()
                         print("USB デバイスをリセットしました")
+                        time.sleep(2)  # リセット後、デバイスが再認識されるまで待つ
+
+                    # リセット後、デバイスを再取得（最大5回リトライ）
+                    dev = None
+                    for retry in range(5):
+                        dev = usb.core.find(idVendor=0x05ca, idProduct=0x0368)
+                        if dev is not None:
+                            break
                         time.sleep(1)
-                    dev = usb.core.find(idVendor=0x05ca, idProduct=0x0368)
+
+                    if dev is None:
+                        print("Warning: USB device not found after reset, skipping...")
+                        continue
+
                     #Bus 003 Device 019: ID 05ca:0368 Ricoh Co., Ltd RICOH THETA V
-                        # アクティブなコンフィグの全インターフェースでドライバをデタッチ
-                    for cfg in dev:
-                        for intf in cfg:
-                            num = intf.bInterfaceNumber
-                            if dev.is_kernel_driver_active(num):
-                                dev.detach_kernel_driver(num)
-                                usb.util.release_interface(dev, num)
+                    # アクティブなコンフィグの全インターフェースでドライバをデタッチ
+                    try:
+                        for cfg in dev:
+                            for intf in cfg:
+                                num = intf.bInterfaceNumber
+                                if dev.is_kernel_driver_active(num):
+                                    dev.detach_kernel_driver(num)
+                                    usb.util.release_interface(dev, num)
+                    except Exception as e:
+                        print(f"Warning: Failed to detach kernel driver: {e}")
+
                     time.sleep(1)
                     device_port = "usb:" + device_list[i-9][4:7] + ":" + device_list[i-9][15:18]
                     print("device port: " + device_port)
