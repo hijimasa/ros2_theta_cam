@@ -22,27 +22,64 @@ DEVICE_IDPRODUCT_STR2 = "idProduct          0x0368"
 
 class FrameGrabber:
     def __init__(self, config_str):
-        # １回だけ開く
-        print(f"Attempting to open GStreamer pipeline: {config_str}")
-        self.cap = cv2.VideoCapture(config_str, cv2.CAP_GSTREAMER)
-        if not self.cap.isOpened():
-            print(f"Failed to open capture pipeline with config: {config_str}")
-            # Try to get more error information
-            import os
-            os.environ['GST_DEBUG'] = '3'
-            raise IOError(f"Cannot open capture pipeline: {config_str}")
-        # サイズ１のキュー（常に最新１枚だけ残す）
+        self.config_str = config_str
+        self.cap = None
         self.q = queue.Queue(maxsize=1)
         self.running = True
+        self.reconnecting = False
+        self.last_frame_time = time.time()
+        self.consecutive_failures = 0
+        self.max_consecutive_failures = 10  # 10回連続失敗で再接続
+
+        # 初回接続
+        self._open_capture()
+
         # 背景スレッド起動
         t = Thread(target=self._grab_loop, daemon=True)
         t.start()
 
+    def _open_capture(self):
+        """Open or reopen the capture pipeline"""
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except:
+                pass
+
+        print(f"Attempting to open GStreamer pipeline: {self.config_str}")
+        self.cap = cv2.VideoCapture(self.config_str, cv2.CAP_GSTREAMER)
+        if not self.cap.isOpened():
+            print(f"Failed to open capture pipeline with config: {self.config_str}")
+            import os
+            os.environ['GST_DEBUG'] = '3'
+            raise IOError(f"Cannot open capture pipeline: {self.config_str}")
+
+        self.last_frame_time = time.time()
+        self.consecutive_failures = 0
+        print("GStreamer pipeline opened successfully")
+
     def _grab_loop(self):
         while self.running:
+            if self.reconnecting:
+                time.sleep(0.1)
+                continue
+
             ret, frame = self.cap.read()
             if not ret:
+                self.consecutive_failures += 1
+                print(f"Frame capture failed (consecutive failures: {self.consecutive_failures})")
+
+                # 連続失敗が多い場合、または長時間フレームが取得できない場合
+                if (self.consecutive_failures >= self.max_consecutive_failures or
+                    time.time() - self.last_frame_time > 5.0):
+                    print("Stream appears to be dead. Attempting to reconnect...")
+                    self._reconnect()
                 continue
+
+            # 成功したらカウンタリセット
+            self.consecutive_failures = 0
+            self.last_frame_time = time.time()
+
             # もし前のフレームが残っていれば捨てる
             if self.q.full():
                 try:
@@ -50,6 +87,29 @@ class FrameGrabber:
                 except queue.Empty:
                     pass
             self.q.put(frame)
+
+    def _reconnect(self):
+        """Reconnect to the camera stream"""
+        if self.reconnecting:
+            return
+
+        self.reconnecting = True
+        try:
+            print("Closing existing capture...")
+            if self.cap is not None:
+                self.cap.release()
+
+            # Wait before reconnecting
+            time.sleep(2)
+
+            print("Attempting to reopen capture...")
+            self._open_capture()
+            print("Reconnection successful")
+        except Exception as e:
+            print(f"Reconnection failed: {e}")
+            # Will retry on next failure
+        finally:
+            self.reconnecting = False
 
     def read(self, timeout=1.0):
         try:
@@ -60,7 +120,8 @@ class FrameGrabber:
 
     def release(self):
         self.running = False
-        self.cap.release()
+        if self.cap is not None:
+            self.cap.release()
 
 # Nodeクラスを継承
 class ThetaNode(Node):
@@ -181,6 +242,9 @@ class ThetaNode(Node):
         self.error_flag = False
         # 30FPSから10FPSへの間引き用カウンタ（3回に1回publish）
         self.counter = 0
+        # フレーム取得の連続失敗カウンタ
+        self.read_failures = 0
+        self.max_read_failures = 30  # 30回連続失敗でシャットダウン（約0.5秒）
 
         # CvBridgeを1回だけ生成（毎回生成するとオーバーヘッドが大きい）
         self.bridge = CvBridge()
@@ -192,6 +256,9 @@ class ThetaNode(Node):
         ret, frame = self.frame_grabber.read(timeout=1.0)
 
         if ret:
+            # フレーム取得成功 - 失敗カウンタをリセット
+            self.read_failures = 0
+
             self.counter = self.counter + 1
             if self.counter >= 3:
                 self.counter = 0
@@ -200,11 +267,16 @@ class ThetaNode(Node):
                 image_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
                 self.publisher.publish(image_msg)
         else:
-            # フレーム取得失敗時はエラーログを出してシャットダウン
-            self.get_logger().error('Failed to capture image. Shutting down node.')
-            # ROS2 の spin を抜ける
-            self.error_flag = True
-            self.timer.cancel()
+            # フレーム取得失敗 - カウンタを増やす
+            self.read_failures += 1
+
+            # 一定回数失敗したらワーニング、さらに多く失敗したらシャットダウン
+            if self.read_failures == 10:
+                self.get_logger().warn(f'Failed to capture image {self.read_failures} times. Stream may be reconnecting...')
+            elif self.read_failures >= self.max_read_failures:
+                self.get_logger().error(f'Failed to capture image {self.read_failures} times. Shutting down node.')
+                self.error_flag = True
+                self.timer.cancel()
 
 def main(args=None):
     rclpy.init(args=args)
