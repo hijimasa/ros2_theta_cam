@@ -131,7 +131,8 @@ class ThetaNode(Node):
 
         self.declare_parameter('mode', '4K')
         self.declare_parameter('serial', '')
-        
+        self.declare_parameter('frame_skip', 1)  # 1 = no skip, 2 = skip every other frame, 3 = skip 2 out of 3 frames
+
         mode = self.get_parameter('mode').get_parameter_value().string_value
         mode = mode.replace('"', '')
         mode = mode.replace("'", '')
@@ -140,6 +141,13 @@ class ThetaNode(Node):
         serial = self.get_parameter('serial').get_parameter_value().string_value
         serial = serial.replace('"', '')
         serial = serial.replace("'", '')
+
+        # Get frame_skip parameter
+        self.frame_skip = self.get_parameter('frame_skip').get_parameter_value().integer_value
+        if self.frame_skip < 1:
+            self.get_logger().warn(f'Invalid frame_skip value {self.frame_skip}, using default 1')
+            self.frame_skip = 1
+        self.get_logger().info(f'Frame skip set to: {self.frame_skip} (publish 1 out of every {self.frame_skip} frames)')
 
         is_found = False
         while True:
@@ -240,7 +248,7 @@ class ThetaNode(Node):
         self.timer = self.create_timer(self.timer_period, self.publish_image_callback)
 
         self.error_flag = False
-        # 30FPSから10FPSへの間引き用カウンタ（3回に1回publish）
+        # フレーム間引き用カウンタ（frame_skip回に1回publish）
         self.counter = 0
         # フレーム取得の連続失敗カウンタ
         self.read_failures = 0
@@ -260,7 +268,7 @@ class ThetaNode(Node):
             self.read_failures = 0
 
             self.counter = self.counter + 1
-            if self.counter >= 3:
+            if self.counter >= self.frame_skip:
                 self.counter = 0
                 # スライシングによる高速リサイズ（cv2.resizeより軽量）
                 image = frame[::2, ::2]
